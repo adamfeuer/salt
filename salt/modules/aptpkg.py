@@ -425,6 +425,10 @@ def install(name=None,
 
         .. versionadded:: 2015.8.0
 
+    use_aptfast
+         Whether or not to install using the apt-fast wrapper if available on the minion.
+
+        .. versionadded:: 2015.12.25
 
     Multiple Package Installation Options:
 
@@ -540,7 +544,11 @@ def install(name=None,
     if pkg_type == 'repository':
         pkg_params_items = six.iteritems(pkg_params)
         # Build command prefix
-        cmd_prefix.extend(['apt-get', '-q', '-y'])
+        if (('aptpkg.use_aptfast' in __opts__ and __opts__['aptpkg.use_aptfast']) or \
+                salt.utils.is_true(kwargs.get('use_aptfast', False))) and salt.utils.which('apt-fast'):
+            cmd_prefix.extend(['apt-fast', '-q', '-y'])
+        else:
+            cmd_prefix.extend(['apt-get', '-q', '-y'])
         if kwargs.get('force_yes', False):
             cmd_prefix.append('--force-yes')
         if 'force_conf_new' in kwargs and kwargs['force_conf_new']:
@@ -881,7 +889,12 @@ def upgrade(refresh=True, dist_upgrade=False, **kwargs):
 
         .. versionadded:: 2015.8.0
 
-    CLI Example:
+    use_aptfast
+         Whether or not to install using the apt-fast wrapper if available on the minion.
+
+        .. versionadded:: 2015.12.25
+
+     CLI Example:
 
     .. code-block:: bash
 
@@ -900,11 +913,16 @@ def upgrade(refresh=True, dist_upgrade=False, **kwargs):
         force_conf = '--force-confnew'
     else:
         force_conf = '--force-confold'
+    if salt.utils.is_true(kwargs.get('use_aptfast', False)) and salt.utils.which('apt-fast'):
+         cmd_prefix = ['apt-fast', '-q', '-y']
+     else:
+         cmd_prefix = ['apt-get', '-q', '-y']
+
     if dist_upgrade:
-        cmd = ['apt-get', '-q', '-y', '-o', 'DPkg::Options::={0}'.format(force_conf),
+        cmd = cmd_prefix + ['-o', 'DPkg::Options::={0}'.format(force_conf),
                '-o', 'DPkg::Options::=--force-confdef', 'dist-upgrade']
     else:
-        cmd = ['apt-get', '-q', '-y', '-o', 'DPkg::Options::={0}'.format(force_conf),
+        cmd = cmd_prefix + ['-o', 'DPkg::Options::={0}'.format(force_conf),
                '-o', 'DPkg::Options::=--force-confdef', 'upgrade']
     call = __salt__['cmd.run_all'](cmd,
                                    output_loglevel='trace',
