@@ -544,11 +544,7 @@ def install(name=None,
     if pkg_type == 'repository':
         pkg_params_items = six.iteritems(pkg_params)
         # Build command prefix
-        if (('aptpkg.use_aptfast' in __opts__ and __opts__['aptpkg.use_aptfast']) or \
-                salt.utils.is_true(kwargs.get('use_aptfast', False))) and salt.utils.which('apt-fast'):
-            cmd_prefix.extend(['apt-fast', '-q', '-y'])
-        else:
-            cmd_prefix.extend(['apt-get', '-q', '-y'])
+        cmd_prefix = _get_apt_cmd_prefix(kwargs)
         if kwargs.get('force_yes', False):
             cmd_prefix.append('--force-yes')
         if 'force_conf_new' in kwargs and kwargs['force_conf_new']:
@@ -869,6 +865,29 @@ def purge(name=None, pkgs=None, **kwargs):
     return _uninstall(action='purge', name=name, pkgs=pkgs, **kwargs)
 
 
+def _use_apt_fast(kwargs):
+    log.debug("Testing for apt-fast...")
+    aptpkg_use_aptfast_setting = ('aptpkg.use_aptfast' in __opts__ and __opts__['aptpkg.use_aptfast'])
+    log.debug("aptpkg.use_aptfast option setting: '{}'".format(aptpkg_use_aptfast_setting))
+    apt_fast_path = salt.utils.which('apt-fast')
+    log.debug("apt_fast path: '{}'".format(apt_fast_path))
+    use_aptfast_arg = salt.utils.is_true(kwargs.get('use_aptfast', False))
+    log.debug("use_apt_fast setting: '{}'".format(use_aptfast_arg))
+    result = (aptpkg_use_aptfast_setting or use_aptfast_arg) and apt_fast_path
+    return result
+
+
+def _get_apt_cmd_prefix(kwargs):
+    cmd_prefix = []
+    if _use_apt_fast(kwargs):
+        log.debug("Using apt-fast instead of apt-get to install packages.")
+        cmd_prefix.extend(['apt-fast', '-q', '-y'])
+    else:
+        cmd_prefix.extend(['apt-get', '-q', '-y'])
+    return cmd_prefix
+
+
+
 def upgrade(refresh=True, dist_upgrade=False, **kwargs):
     '''
     Upgrades all packages via ``apt-get dist-upgrade``
@@ -913,10 +932,7 @@ def upgrade(refresh=True, dist_upgrade=False, **kwargs):
         force_conf = '--force-confnew'
     else:
         force_conf = '--force-confold'
-    if salt.utils.is_true(kwargs.get('use_aptfast', False)) and salt.utils.which('apt-fast'):
-         cmd_prefix = ['apt-fast', '-q', '-y']
-     else:
-         cmd_prefix = ['apt-get', '-q', '-y']
+    cmd_prefix = _get_apt_cmd_prefix(kwargs)
 
     if dist_upgrade:
         cmd = cmd_prefix + ['-o', 'DPkg::Options::={0}'.format(force_conf),
